@@ -39,8 +39,8 @@ function AuthPageContent() {
               </p>
             </div>
             <AuthForm mode={mode} />
-          </div>
-        </div>
+                    </div>
+                  </div>
       </main>
     </div>
   )

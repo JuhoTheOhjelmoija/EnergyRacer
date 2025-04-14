@@ -7,11 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
-import { Award, Coffee, LineChart, Plus, Trophy, Zap, Flame, Sunrise, CameraIcon } from "lucide-react"
+import { Award, Coffee, LineChart, Plus, Trophy, Zap, Flame, Sunrise } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "sonner"
-import { QRScannerModal } from "@/components/qr-scanner-modal"
 import { useRouter } from "next/navigation"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -132,7 +131,6 @@ export default function DashboardPage() {
   const [recentAchievements, setRecentAchievements] = useState<CompletedAchievement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isQRScannerOpen, setIsQRScannerOpen] = useState(false)
   const router = useRouter()
   const [dailyTotal, setDailyTotal] = useState(0)
   const [weeklyTotal, setWeeklyTotal] = useState(0)
@@ -147,11 +145,11 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     try {
-      if (!authUser) {
+        if (!authUser) {
         console.log('No auth user, skipping data fetch')
-        setLoading(false)
-        return
-      }
+          setLoading(false)
+          return
+        }
 
       console.log('Starting data fetch for user:', authUser.id)
 
@@ -169,18 +167,18 @@ export default function DashboardPage() {
       setEntries(entriesData || [])
       setRecentEntries(entriesData?.slice(0, 5) || [])
 
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
-        .single()
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authUser.id)
+          .single()
 
-      if (userError) {
+        if (userError) {
         console.error('Error fetching user data:', userError)
-        throw userError
-      }
+            throw userError
+          }
       console.log('User data:', userData)
-      setUser(userData)
+          setUser(userData)
 
       const { data: achievements, error: achievementsError } = await supabase
         .from('achievements')
@@ -194,8 +192,8 @@ export default function DashboardPage() {
 
       const { data: userAchievements, error: userAchievementsError } = await supabase
         .from('user_achievements')
-        .select('*')
-        .eq('user_id', authUser.id)
+          .select('*')
+          .eq('user_id', authUser.id)
 
       if (userAchievementsError) {
         console.error('Error fetching user achievements:', userAchievementsError)
@@ -581,16 +579,16 @@ export default function DashboardPage() {
       })
       setWeeklyData(weeklyStats)
 
-      const { data: leaderboardData, error: leaderboardError } = await supabase
-        .from('users')
-        .select('id, name, avatar_url, total_caffeine, region')
-        .order('total_caffeine', { ascending: false })
-        .limit(3)
+        const { data: leaderboardData, error: leaderboardError } = await supabase
+          .from('users')
+          .select('id, name, avatar_url, total_caffeine, region')
+          .order('total_caffeine', { ascending: false })
+          .limit(3)
 
-      if (leaderboardError) throw leaderboardError
-      setTopUsers(leaderboardData)
+        if (leaderboardError) throw leaderboardError
+        setTopUsers(leaderboardData)
 
-    } catch (error) {
+      } catch (error) {
       console.error('Error in loadData:', error)
       if (error instanceof Error) {
         setError(error.message)
@@ -599,10 +597,10 @@ export default function DashboardPage() {
         setError('Unknown error occurred')
         toast.error('Unknown error occurred')
       }
-    } finally {
-      setLoading(false)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
 
   const getAchievementIcon = (iconName: string) => {
     switch (iconName) {
@@ -619,30 +617,35 @@ export default function DashboardPage() {
     }
   }
 
-  const handleQRCodeScanned = async (data: string) => {
-    if (!authUser || !user) {
-      toast.error('Please sign in first')
-      return
-    }
-
+  const addEntry = async (drinkData: any) => {
     try {
-      const jsonData = JSON.parse(data)
-      if (jsonData.type === 'drink') {
-        const { data: insertData, error: insertError } = await supabase
-          .from('consumption')
-          .insert([{
-            user_id: authUser.id,
-            drink_name: jsonData.name,
-            caffeine_amount: jsonData.caffeine
-          }])
-
-        if (insertError) throw insertError
-
-        toast.success('Entry added successfully!')
-        loadData()
+      if (!authUser) {
+        toast.error('Please sign in to add an entry')
+        return
       }
+
+      const { data, error } = await supabase
+        .from('consumption')
+        .insert([
+          {
+            user_id: authUser.id,
+            drink_name: drinkData.name,
+            caffeine_amount: drinkData.caffeine,
+          }
+        ])
+        .select()
+
+      if (error) {
+        console.error('Error adding entry:', error)
+        toast.error('Error adding entry')
+        return
+      }
+
+      toast.success('Entry added successfully')
+      loadData()
     } catch (error) {
-      toast.error('Error reading QR code')
+      console.error('Error in addEntry:', error)
+      toast.error('Error adding entry')
     }
   }
 
@@ -664,7 +667,7 @@ export default function DashboardPage() {
           <p className="text-destructive">Error: {error}</p>
           <Button onClick={() => loadData()} className="mt-4">
             Try again
-          </Button>
+        </Button>
         </div>
       </div>
     )
@@ -678,6 +681,7 @@ export default function DashboardPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
+      
       <main className="flex-1 container py-8">
         <div className="flex flex-col space-y-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -691,10 +695,6 @@ export default function DashboardPage() {
                   <Plus className="mr-2 h-4 w-4" />
                   Add Entry
                 </Link>
-              </Button>
-              <Button onClick={() => setIsQRScannerOpen(true)}>
-                <CameraIcon className="mr-2 h-4 w-4" />
-                Scan QR
               </Button>
             </div>
           </div>
@@ -840,20 +840,20 @@ export default function DashboardPage() {
                     {inProgressAchievements.length > 0 ? (
                       <div className="space-y-3">
                         {inProgressAchievements.map((achievement) => (
-                          <div key={achievement.id} className="flex items-start gap-3">
-                            <div className="bg-muted p-1.5 rounded-full mt-0.5">
+                    <div key={achievement.id} className="flex items-start gap-3">
+                      <div className="bg-muted p-1.5 rounded-full mt-0.5">
                               {achievement.icon}
-                            </div>
+                      </div>
                             <div className="flex-1">
                               <p className="font-medium text-sm">{achievement.title}</p>
-                              <p className="text-xs text-muted-foreground mb-1">{achievement.description}</p>
+                        <p className="text-xs text-muted-foreground mb-1">{achievement.description}</p>
                               <Progress value={achievement.progress} className="h-1.5 mb-1" />
                               <p className="text-xs text-right text-muted-foreground">
                                 {achievement.current} / {achievement.total}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                       </div>
                     ) : (
                       <div className="text-center py-6 text-muted-foreground">
@@ -901,6 +901,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+
       <footer className="w-full border-t py-6">
         <div className="container flex flex-col items-center justify-center gap-4 md:flex-row md:gap-8">
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
@@ -908,11 +909,6 @@ export default function DashboardPage() {
           </p>
         </div>
       </footer>
-      <QRScannerModal
-        isOpen={isQRScannerOpen}
-        onClose={() => setIsQRScannerOpen(false)}
-        onCodeScanned={handleQRCodeScanned}
-      />
     </div>
   )
 }
