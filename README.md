@@ -4,11 +4,12 @@ A gamified energy drink consumption tracking application that helps users monito
 
 ## Description
 
-EnergyRacer is a modern web application built with Next.js and Supabase that gamifies the tracking of energy drink consumption. Users can scan QR codes from energy drinks to log their consumption, track their caffeine intake, and earn achievements based on their consumption patterns.
+EnergyRacer is a modern web application built with Next.js and Supabase that gamifies the tracking of energy drink consumption. Users can log their energy drinks to log their consumption, track their caffeine intake, and earn achievements based on their consumption patterns.
+
+Currently this only works in Finland
 
 ### Key Features
 
-- QR code scanning for easy drink logging
 - Real-time caffeine tracking
 - Achievement system with various categories
 - User profile management
@@ -28,7 +29,7 @@ EnergyRacer is a modern web application built with Next.js and Supabase that gam
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/EnergyRacer.git
+git clone https://github.com/JuhoTheOhjelmoija/EnergyRacer.git
 cd EnergyRacer
 ```
 
@@ -52,10 +53,9 @@ npm run dev
 ## Usage
 
 1. Register or log in to your account
-2. Use the QR code scanner to log energy drinks
-3. Track your consumption and achievements
-4. View your progress in the dashboard
-5. Check your achievements in the achievements page
+2. Track your consumption and achievements
+3. View your progress in the dashboard
+4. Check your achievements in the achievements page
 
 ## Technologies
 
