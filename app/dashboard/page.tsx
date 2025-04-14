@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
-import { Award, Coffee, LineChart, Plus, Trophy, Zap, Flame, Sunrise } from "lucide-react"
+import { Award, Coffee, LineChart, Plus, Trophy, Zap, Flame, Sunrise, CameraIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "sonner"
@@ -633,7 +633,7 @@ export default function DashboardPage() {
           .insert([{
             user_id: authUser.id,
             drink_name: jsonData.name,
-            caffeine_amount: jsonData.caffeine_amount
+            caffeine_amount: jsonData.caffeine
           }])
 
         if (insertError) throw insertError
@@ -685,12 +685,18 @@ export default function DashboardPage() {
               <h1 className="text-3xl font-bold tracking-tight">Welcome, {user?.name || 'User'}!</h1>
               <p className="text-muted-foreground">Here's a summary of your caffeine consumption</p>
             </div>
-            <Button asChild>
-              <Link href="/tracking">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Entry
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button asChild>
+                <Link href="/tracking">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Entry
+                </Link>
+              </Button>
+              <Button onClick={() => setIsQRScannerOpen(true)}>
+                <CameraIcon className="mr-2 h-4 w-4" />
+                Scan QR
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
