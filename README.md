@@ -64,7 +64,6 @@ npm run dev
   - TypeScript
   - Tailwind CSS
   - Shadcn/ui
-  - React QR Scanner
 
 - **Backend:**
   - Supabase
