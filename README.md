@@ -2,13 +2,21 @@
 
 Track your caffeine consumption and compete with your friends! EnergyRacer is a fun way to keep track of your daily caffeine intake.
 
+![EnergyRacer Home](docs/images/home.png)
+
 ## Features
 
-- Caffeine consumption tracking
-- Daily and weekly statistics
-- Regional rankings
-- Achievements and rewards
-- Responsive user interface
+- Caffeine consumption tracking with detailed statistics
+- Daily and weekly consumption visualization
+- Regional leaderboards and rankings
+- Achievement system with various challenges
+- Customizable consumption goals
+- User profiles and preferences
+- Responsive and modern user interface
+
+![Tracking](docs/images/tracking.png)
+![Leaderboard](docs/images/leaderboard.png)
+![Achievements](docs/images/achievements.png)
 
 ## Technologies
 
@@ -59,9 +67,10 @@ npm install
      - Confirm email: OFF
      - Secure email change: OFF
 
-6. Start the development server:
+6. Start the application:
 ```bash
-npm run dev
+# For the best development experience, use:
+npm run start
 ```
 
 The application is now running at [http://localhost:3000](http://localhost:3000)
