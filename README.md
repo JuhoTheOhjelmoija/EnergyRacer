@@ -35,11 +35,13 @@ npm install
    - Go to [Supabase](https://supabase.com/) and create a new project
    - Go to Project Settings > API
    - Copy the Project URL and Project API key
-   - Create a new file `.env.local` in the project root
-   - Add the following to `.env.local`:
+   - Create a new file `.env` in the project root
+   - Add the following to `.env`:
      ```
      NEXT_PUBLIC_SUPABASE_URL=your_project_url
      NEXT_PUBLIC_SUPABASE_ANON_KEY=your_project_api_key
+     SUPABASE_URL=your_project_url_again
+     SUPABASE_ANON_KEY=your_project_api_key_again
      ```
 
 4. Set up the database:
