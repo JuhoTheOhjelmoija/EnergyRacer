@@ -1,13 +1,18 @@
 "use client"
 
+import React, { useCallback } from "react"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
-export function ModeToggle() {
+export const ModeToggle = React.memo(() => {
   const { setTheme } = useTheme()
+
+  const handleSetTheme = useCallback((theme: string) => {
+    setTheme(theme)
+  }, [setTheme])
 
   return (
     <DropdownMenu>
@@ -19,10 +24,10 @@ export function ModeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>Light</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>Dark</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleSetTheme("light")}>Light</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleSetTheme("dark")}>Dark</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleSetTheme("system")}>System</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})

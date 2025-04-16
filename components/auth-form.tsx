@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { Coffee, Eye, EyeOff, Search } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { AuthApiError } from '@supabase/supabase-js'
+import { useAuth } from "@/components/auth-provider"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -54,9 +55,10 @@ const validateEmail = (email: string) => {
 
 export function AuthForm({ mode }: { mode: string }) {
   const router = useRouter()
+  const { user: authUser } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [cooldownTime, setCooldownTime] = useState<number | null>(null)
+  const [cooldownTime, setCooldownTime] = useState<number | undefined>(undefined)
   const [formData, setFormData] = useState<FormData>({
     name: "",
     email: "",
@@ -68,12 +70,12 @@ export function AuthForm({ mode }: { mode: string }) {
   const [selectedCity, setSelectedCity] = useState("")
   const [error, setError] = useState<Error | null>(null)
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
-  }
+  }, [])
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
@@ -81,141 +83,235 @@ export function AuthForm({ mode }: { mode: string }) {
     try {
       if (mode === "signin") {
         await handleSignIn()
-      } else {
+      } else if (mode === "signup") {
         await handleSignUp()
+      } else {
+        console.error("Invalid mode:", mode)
+        toast.error("Invalid form mode")
       }
     } catch (error) {
       setError(error as Error)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [mode, formData, selectedCity])
 
-  const handleSignIn = async () => {
+  const handleSignIn = useCallback(async () => {
     try {
+      // Validate email format
+      if (!validateEmail(formData.email)) {
+        toast.error("Please enter a valid email address")
+        return
+      }
+
+      // Validate password
+      if (formData.password.length < 6) {
+        toast.error("Password must be at least 6 characters long")
+        return
+      }
+
+      console.log('Attempting sign in with:', formData.email)
+      
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
+        email: formData.email.toLowerCase().trim(),
         password: formData.password,
       })
 
       if (error) {
-        console.error('Sign in error:', error)
+        console.error('Sign in error details:', {
+          message: error.message,
+          status: error.status,
+          name: error.name
+        })
+        
         if (error.message === 'Invalid login credentials') {
           toast.error('Wrong email or password. Please check your credentials and try again.')
         } else if (error.message.includes('Email not confirmed')) {
           toast.error('Please check your email for the confirmation link before signing in.')
+        } else if (error.message.includes('Too many requests')) {
+          toast.error('Too many attempts. Please try again later.')
         } else {
           toast.error(`Sign in failed: ${error.message}`)
         }
         return
       }
 
-      toast.success("Sign in successful!")
-      router.push("/dashboard")
-    } catch (error) {
-      console.error("Sign in error:", error)
-      toast.error("An unexpected error occurred. Please try again.")
-    }
-  }
+      if (!data?.user) {
+        console.error('No user data returned after successful sign in')
+        toast.error('Sign in successful but no user data received')
+        return
+      }
 
-  const handleSignUp = async () => {
+      console.log('Sign in successful, user:', data.user)
+      toast.success("Sign in successful!")
+      
+      // Add a small delay to ensure the session is properly set
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      router.push("/login")
+    } catch (error) {
+      console.error("Unexpected sign in error:", error)
+      if (error instanceof Error) {
+        toast.error(`An unexpected error occurred: ${error.message}`)
+      } else {
+        toast.error("An unexpected error occurred. Please try again.")
+      }
+    }
+  }, [formData, router])
+
+  const handleSignUp = useCallback(async () => {
     if (cooldownTime && cooldownTime > Date.now()) {
       const secondsLeft = Math.ceil((cooldownTime - Date.now()) / 1000)
       toast.error(`Please wait ${secondsLeft} seconds before trying again`)
       return
     }
 
-    if (!validateEmail(formData.email)) {
-      toast.error("Invalid email address")
+    // Validate all fields
+    if (!formData.name || formData.name.length < 2) {
+      toast.error("Name must be at least 2 characters long")
       return
     }
 
-    if (!formData.isPasswordValid) {
+    if (!validateEmail(formData.email)) {
+      toast.error("Please enter a valid email address")
+      return
+    }
+
+    if (!formData.password || formData.password.length < 6) {
       toast.error("Password must be at least 6 characters long")
       return
     }
 
     if (!selectedCity) {
-      toast.error("Please select a city")
-      return
-    }
-
-    if (!formData.name || formData.name.length < 2) {
-      toast.error("Name is required and must be at least 2 characters long")
+      toast.error("Please select your city")
       return
     }
 
     try {
+      console.log('Starting sign up process for:', formData.email)
+      
+      // 1. Create user in Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email.toLowerCase().trim(),
         password: formData.password,
         options: {
           data: {
             name: formData.name.trim(),
-            region: selectedCity,
-            daily_goal: 400,
-            total_caffeine: 0,
-            show_in_region_ranking: true
-          }
+            region: selectedCity
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       })
 
-      if (authError?.status === 422 || authError?.message?.includes("User already registered")) {
-        toast.error("Email address is already registered")
-        const tabsList = document.querySelector('[role="tablist"]') as HTMLElement
-        const signinTab = tabsList?.querySelector('[value="signin"]') as HTMLElement
-        if (signinTab) {
-          signinTab.click()
+      if (authError) {
+        console.error("Auth error during sign up:", authError)
+        if (authError.message.includes("User already registered")) {
+          toast.error("This email is already registered. Please sign in instead.")
+          const tabsList = document.querySelector('[role="tablist"]') as HTMLElement
+          const signinTab = tabsList?.querySelector('[value="signin"]') as HTMLElement
+          if (signinTab) {
+            signinTab.click()
+          }
+          return
         }
+        toast.error(`Registration failed: ${authError.message}`)
         return
       }
 
-      if (authError) {
-        throw authError
-      }
-
       if (!authData.user) {
-        throw new Error("Failed to create user")
+        console.error("No user data returned after sign up")
+        toast.error("Failed to create user account")
+        return
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      console.log('User created in Auth:', authData.user.id)
 
+      // 2. Create user profile in database
       const { error: profileError } = await supabase
         .from('users')
-        .upsert({
+        .insert({
           id: authData.user.id,
           name: formData.name.trim(),
           region: selectedCity,
           daily_goal: 400,
           total_caffeine: 0,
-          show_in_region_ranking: true
+          show_in_region_ranking: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
 
       if (profileError) {
         console.error("Profile creation error:", profileError)
-        throw new Error("Failed to create profile: " + profileError.message)
+        toast.error("Failed to create user profile: " + profileError.message)
+        return
       }
 
-      toast.success("Account created successfully!")
-      router.push("/dashboard")
+      console.log('User profile created successfully')
+      toast.success("Account created successfully! Please check your email to confirm your account.")
+      
+      // Clear form
+      setFormData({
+        name: "",
+        email: "",
+        password: "",
+        region: "",
+        isPasswordValid: true
+      })
+      setSelectedCity("")
 
     } catch (error: any) {
-      if (!error.message?.includes("User already registered")) {
-        console.error("Sign up error:", error)
-      }
-      toast.error(error.message || "An unexpected error occurred")
+      console.error("Sign up error:", error)
+      toast.error(error.message || "An unexpected error occurred during registration")
     } finally {
       setCooldownTime(Date.now() + 5000)
     }
-  }
+  }, [formData, selectedCity, cooldownTime])
 
-  const validatePassword = (value: string) => {
+  const validatePassword = useCallback((value: string) => {
     setFormData(prev => ({
       ...prev,
       password: value,
       isPasswordValid: value.length >= 6
     }))
-  }
+  }, [])
+
+  const handleDeleteAccount = useCallback(async () => {
+    if (!authUser) {
+      toast.error("Please sign in first")
+      return
+    }
+
+    try {
+      const [deleteEntriesError, deleteAchievementsError, deleteProfileError] = await Promise.all([
+        supabase.from('consumption').delete().eq('user_id', authUser.id),
+        supabase.from('user_achievements').delete().eq('user_id', authUser.id),
+        supabase.from('users').delete().eq('id', authUser.id)
+      ]).then(results => results.map(result => result.error))
+
+      if (deleteEntriesError) throw deleteEntriesError
+      if (deleteAchievementsError) throw deleteAchievementsError
+      if (deleteProfileError) throw deleteProfileError
+
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
+
+      toast.success("Account deleted successfully")
+      router.push("/auth")
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      toast.error("Error deleting account")
+    }
+  }, [authUser, router])
+
+  const isCooldownActive = useMemo(() => 
+    cooldownTime !== undefined && cooldownTime > Date.now(), 
+    [cooldownTime]
+  )
+
+  const cooldownSeconds = useMemo(() => 
+    isCooldownActive ? Math.ceil((cooldownTime! - Date.now()) / 1000) : 0,
+    [isCooldownActive, cooldownTime]
+  )
 
   return (
     <Card>
@@ -384,12 +480,12 @@ export function AuthForm({ mode }: { mode: string }) {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={isLoading || Boolean(cooldownTime && cooldownTime > Date.now())}
+                disabled={isLoading || isCooldownActive}
               >
                 {isLoading 
                   ? "Creating account..." 
-                  : cooldownTime && cooldownTime > Date.now()
-                    ? `Wait ${Math.ceil((cooldownTime - Date.now()) / 1000)}s...`
+                  : isCooldownActive
+                    ? `Wait ${cooldownSeconds}s...`
                     : "Create Account"
                 }
               </Button>

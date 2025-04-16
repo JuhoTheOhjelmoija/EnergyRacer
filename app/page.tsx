@@ -56,9 +56,6 @@ export default function LandingPage() {
                   <Button variant="outline" size="lg" asChild>
                     <Link href="/auth?mode=signin">Sign In</Link>
                   </Button>
-                  <Button variant="outline" size="lg" asChild>
-                    <Link href="/leaderboard">View Leaderboard</Link>
-                  </Button>
                 </div>
               </div>
               <Image

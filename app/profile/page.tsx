@@ -261,7 +261,7 @@ export default function ProfilePage() {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
-      router.push('/auth')
+      router.push('/login')
     } catch (error) {
       console.error('Error signing out:', error)
       toast.error('Failed to sign out')
@@ -303,18 +303,24 @@ export default function ProfilePage() {
       const { error: signOutError } = await supabase.auth.signOut()
       if (signOutError) throw signOutError
 
-      toast.success("Tili poistettu onnistuneesti")
-      router.push("/auth")
+      toast.success("Account deleted successfully")
+      router.push("/login")
     } catch (error) {
       console.error('Error deleting account:', error)
-      toast.error("Virhe tilin poistamisessa")
+      toast.error("Error deleting account")
     }
   }
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      if (!e.target.files || !e.target.files[0]) return
-      if (!authUser) return
+      if (!e.target.files || !e.target.files[0]) {
+        toast.error("Valitse kuva")
+        return
+      }
+      if (!authUser) {
+        toast.error("Kirjaudu ensin sisään")
+        return
+      }
 
       setUploadingAvatar(true)
       const file = e.target.files[0]
@@ -333,35 +339,81 @@ export default function ProfilePage() {
 
       // Luodaan uniikki tiedostonimi
       const fileExt = file.name.split('.').pop()
-      const fileName = `${authUser.id}-${Math.random()}.${fileExt}`
+      const fileName = `${authUser.id}-${Date.now()}.${fileExt}`
       const filePath = `avatars/${fileName}`
 
-      // Ladataan kuva Supabase Storageen
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file)
+      console.log('Starting upload to:', filePath)
 
-      if (uploadError) throw uploadError
+      // Ladataan kuva Supabase Storageen
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        })
+
+      if (uploadError) {
+        console.error('Upload error details:', {
+          message: uploadError.message,
+          name: uploadError.name,
+          details: uploadError.details,
+          hint: uploadError.hint,
+          code: uploadError.code
+        })
+        throw new Error(`Upload failed: ${uploadError.message}`)
+      }
+
+      if (!uploadData) {
+        throw new Error('No upload data returned')
+      }
+
+      console.log('Upload successful:', uploadData)
 
       // Haetaan ladatun kuvan URL
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath)
 
-      // Päivitetään käyttäjän profiili uudella kuvalla
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ avatar_url: publicUrl })
-        .eq('id', authUser.id)
+      console.log('Public URL:', publicUrl)
 
-      if (updateError) throw updateError
+      // Päivitetään käyttäjän profiili uudella kuvalla
+      const { data: updateData, error: updateError } = await supabase
+        .from('users')
+        .update({ 
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', authUser.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        console.error('Update error details:', {
+          message: updateError.message,
+          name: updateError.name,
+          details: updateError.details,
+          hint: updateError.hint,
+          code: updateError.code
+        })
+        throw new Error(`Profile update failed: ${updateError.message}`)
+      }
+
+      if (!updateData) {
+        throw new Error('No update data returned')
+      }
+
+      console.log('Profile updated successfully:', updateData)
 
       // Päivitetään käyttäjän tila
       setUser(prev => prev ? { ...prev, avatar_url: publicUrl } : null)
       toast.success("Profiilikuva päivitetty onnistuneesti!")
     } catch (error) {
       console.error('Error uploading avatar:', error)
-      toast.error("Profiilikuvan lataus epäonnistui")
+      if (error instanceof Error) {
+        toast.error(`Profiilikuvan lataus epäonnistui: ${error.message}`)
+      } else {
+        toast.error("Profiilikuvan lataus epäonnistui")
+      }
     } finally {
       setUploadingAvatar(false)
     }

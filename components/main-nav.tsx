@@ -1,6 +1,6 @@
 "use client"
 
-import * as React from "react"
+import React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -14,7 +14,7 @@ interface MainNavProps {
   }[]
 }
 
-export function MainNav({ items }: MainNavProps) {
+export const MainNav = React.memo(({ items }: MainNavProps) => {
   const pathname = usePathname()
 
   return (
@@ -39,4 +39,4 @@ export function MainNav({ items }: MainNavProps) {
       })}
     </div>
   )
-}
+})

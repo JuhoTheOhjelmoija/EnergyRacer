@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Database } from "@/lib/database.types"
+import { toast } from "react-hot-toast"
 
 interface LeaderboardUser {
   id: string
@@ -23,43 +24,52 @@ export default function LeaderboardPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardUser[]>([])
   const supabase = createClientComponentClient<Database>()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true)
+
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('id, name, region, total_caffeine, avatar_url')
+        .eq('show_in_region_ranking', true)
+        .order('total_caffeine', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching users:', error)
+        toast.error('Failed to load leaderboard')
+        return
+      }
+
+      if (!users) {
+        console.error('No users found')
+        toast.error('No users found')
+        return
+      }
+
+      const filteredUsers = searchQuery === 'All'
+        ? users
+        : users.filter(user => user.name.toLowerCase().includes(searchQuery.toLowerCase()) || user.region.toLowerCase().includes(searchQuery.toLowerCase()))
+
+      setLeaderboardData(filteredUsers.map(user => ({
+        id: user.id,
+        name: user.name,
+        region: user.region,
+        score: user.total_caffeine || 0,
+        avatar: user.avatar_url || ''
+      })))
+    } catch (error) {
+      console.error('Error loading data:', error)
+      toast.error('An unexpected error occurred')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchLeaderboardData = async () => {
-      try {
-        const { data: users, error } = await supabase
-          .from('users')
-          .select('id, name, region, total_caffeine, avatar_url')
-          .order('total_caffeine', { ascending: false })
-
-        if (error) {
-          console.error('Supabase error:', error.message)
-          console.error('Error details:', error.details)
-          console.error('Error hint:', error.hint)
-          return
-        }
-
-        if (!users) {
-          console.log('No users found in the database')
-          return
-        }
-
-        const formattedData = users.map((user) => ({
-          id: user.id,
-          name: user.name || 'Anonymous User',
-          region: user.region || 'Unknown',
-          score: user.total_caffeine || 0,
-          avatar: user.avatar_url || '/placeholder.svg'
-        }))
-
-        setLeaderboardData(formattedData)
-      } catch (error) {
-        console.error('Error in fetchLeaderboardData:', error)
-      }
-    }
-
-    fetchLeaderboardData()
-  }, [])
+    loadData()
+  }, [searchQuery])
 
   // Suomen isoimmat kaupungit
   const regions = [
@@ -79,11 +89,6 @@ export default function LeaderboardPage() {
     "Kotka",
     "Mikkeli"
   ]
-
-  const filteredData = leaderboardData.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.region.toLowerCase().includes(searchQuery.toLowerCase())
-  )
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -136,7 +141,7 @@ export default function LeaderboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {filteredData
+                      {leaderboardData
                         .filter((user) => region === "All Regions" || user.region === region)
                         .map((user, index) => (
                           <div
@@ -170,7 +175,7 @@ export default function LeaderboardPage() {
                             </div>
                           </div>
                         ))}
-                        {filteredData.filter((user) => region === "All Regions" || user.region === region).length === 0 && (
+                        {leaderboardData.filter((user) => region === "All Regions" || user.region === region).length === 0 && (
                           <div className="text-center py-6 text-muted-foreground">
                             No racers found in this region
                           </div>

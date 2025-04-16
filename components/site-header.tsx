@@ -1,13 +1,13 @@
 "use client"
 
+import React from "react"
 import Link from "next/link"
 import { Coffee, Home, Trophy, Award, User } from "lucide-react"
-
+import { usePathname } from "next/navigation"
+import { useAuth } from "@/components/auth-provider"
 import { MainNav } from "@/components/main-nav"
 import { MobileNav } from "@/components/mobile-nav"
 import { Button } from "@/components/ui/button"
-import { usePathname } from "next/navigation"
-import { useAuth } from "@/components/auth-provider"
 
 const items = [
   {
@@ -37,7 +37,7 @@ const items = [
   }
 ]
 
-export function SiteHeader() {
+export const SiteHeader = React.memo(() => {
   const { user: authUser } = useAuth()
   const pathname = usePathname()
   const isHomePage = pathname === "/"
@@ -74,4 +74,4 @@ export function SiteHeader() {
       </div>
     </header>
   )
-}
+})

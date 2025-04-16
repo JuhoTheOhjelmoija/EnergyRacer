@@ -1,59 +1,71 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
+import React from 'react'
+import { useQuery } from '@tanstack/react-query'
 
-type AuthContextType = {
+interface AuthContextType {
   user: User | null
   loading: boolean
+  error: Error | null
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  error: null
 })
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+export const AuthProvider = React.memo(({ children }: { children: React.ReactNode }) => {
+  const { data: session, isLoading, error } = useQuery({
+    queryKey: ['session'],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getSession()
+      return data.session
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  })
 
-  useEffect(() => {
-    console.log('AuthProvider: Starting...')
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('AuthProvider: Session check result:', session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    }).catch((error) => {
-      console.error('AuthProvider: Error checking session:', error)
-      setLoading(false)
-    })
+  const { data: user } = useQuery({
+    queryKey: ['user', session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return null
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+      return data
+    },
+    enabled: !!session?.user?.id,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  })
 
-    // Listen for changes on auth state (logged in, signed out, etc.)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('AuthProvider: Auth state changed:', _event, session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+  const value = {
+    user: session?.user ?? null,
+    loading: isLoading,
+    error: error as Error | null
+  }
 
-    return () => {
-      console.log('AuthProvider: Cleaning up...')
-      subscription.unsubscribe()
-    }
-  }, [])
-
-  console.log('AuthProvider: Rendering with user:', user, 'loading:', loading)
+  if (isLoading) {
+    return <div className="flex min-h-screen items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+    </div>
+  }
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
-}
+})
 
 export const useAuth = () => {
-  return useContext(AuthContext)
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
 } 

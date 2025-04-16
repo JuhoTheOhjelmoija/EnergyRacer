@@ -20,12 +20,21 @@ import { useRouter } from "next/navigation"
 import { enGB } from "date-fns/locale"
 import { buttonVariants } from "@/components/ui/button"
 
-interface ConsumptionEntry {
+interface User {
   id: string
-  user_id: string
+  name: string
+  region: string
+  daily_goal: number
+  total_caffeine: number
+}
+
+interface Consumption {
+  id: string
+  user_id: string | null
   drink_name: string
   caffeine_amount: number
-  created_at: string
+  created_at: string | null
+  updated_at: string | null
 }
 
 interface FormattedEntry {
@@ -44,11 +53,18 @@ interface FormData {
 }
 
 export default function TrackingPage() {
-  const { user: authUser } = useAuth()
+  const { user: authUser, loading: authLoading } = useAuth()
   const router = useRouter()
+  const [userData, setUserData] = useState<User | null>(null)
+  const [entries, setEntries] = useState<Consumption[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [dailyTotal, setDailyTotal] = useState(0)
+  const [weeklyTotal, setWeeklyTotal] = useState(0)
+  const [monthlyTotal, setMonthlyTotal] = useState(0)
+  const [weeklyData, setWeeklyData] = useState<{ name: string; amount: number }[]>([])
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [isLoading, setIsLoading] = useState(false)
-  const [entries, setEntries] = useState<ConsumptionEntry[]>([])
   const [formData, setFormData] = useState<FormData>({
     type: "",
     amount: undefined,
@@ -56,38 +72,98 @@ export default function TrackingPage() {
     time: format(new Date(), "HH:mm")
   })
 
-  // Haetaan merkinnät kun sivu latautuu tai käyttäjä vaihtuu
   useEffect(() => {
-    if (authUser) {
-      fetchEntries()
+    if (!authUser) {
+      router.push("/login")
+      return
     }
-  }, [authUser])
 
-  const fetchEntries = async () => {
+    loadData()
+  }, [authUser, router])
+
+  const loadData = async () => {
+    if (!authUser) return
+
     try {
-      const { data, error } = await supabase
-        .from('consumption')
-        .select('*')
-        .eq('user_id', authUser?.id)
-        .order('created_at', { ascending: false })
+      setLoading(true)
+      setError(null)
 
-      if (error) throw error
+      const [userResponse, entriesResponse] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, name, region, daily_goal, total_caffeine')
+          .eq('id', authUser.id)
+          .single(),
+        supabase
+          .from('consumption')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .order('created_at', { ascending: false })
+      ])
 
-      setEntries(data || [])
+      if (userResponse.error) {
+        console.error('Error fetching user:', userResponse.error)
+        toast.error('Failed to load user data')
+        return
+      }
+
+      if (entriesResponse.error) {
+        console.error('Error fetching entries:', entriesResponse.error)
+        toast.error('Failed to load entries')
+        return
+      }
+
+      setUserData(userResponse.data)
+      setEntries(entriesResponse.data || [])
+
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const weekAgo = new Date(today)
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      const monthAgo = new Date(today)
+      monthAgo.setMonth(monthAgo.getMonth() - 1)
+
+      const todayEntries = (entriesResponse.data || []).filter(entry => 
+        new Date(entry.created_at) >= today
+      )
+      const weekEntries = (entriesResponse.data || []).filter(entry =>
+        new Date(entry.created_at) >= weekAgo
+      )
+      const monthEntries = (entriesResponse.data || []).filter(entry =>
+        new Date(entry.created_at) >= monthAgo
+      )
+
+      setDailyTotal(todayEntries.reduce((sum, entry) => sum + entry.caffeine_amount, 0))
+      setWeeklyTotal(weekEntries.reduce((sum, entry) => sum + entry.caffeine_amount, 0))
+      setMonthlyTotal(monthEntries.reduce((sum, entry) => sum + entry.caffeine_amount, 0))
+
+      const weeklyData = weekEntries.reduce((acc, entry) => {
+        const date = new Date(entry.created_at).toLocaleDateString('en-US', { weekday: 'short' })
+        if (!acc[date]) {
+          acc[date] = 0
+        }
+        acc[date] += entry.caffeine_amount
+        return acc
+      }, {} as Record<string, number>)
+
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      const chartData = days.map(day => ({
+        name: day,
+        amount: weeklyData[day] || 0
+      }))
+
+      setWeeklyData(chartData)
     } catch (error) {
-      console.error('Error fetching entries:', error)
-      toast.error('Error fetching entries')
+      console.error('Error loading data:', error)
+      toast.error('An unexpected error occurred')
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!authUser) {
-      toast.error("Please sign in first")
-      router.push("/auth")
-      return
-    }
+    if (!authUser) return
 
     if (!formData.type || !formData.amount) {
       toast.error("Please fill in all fields")
@@ -97,22 +173,11 @@ export default function TrackingPage() {
     setIsLoading(true)
 
     try {
-      // Haetaan käyttäjän tiedot
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('total_caffeine')
-        .eq('id', authUser.id)
-        .single()
-
-      if (userError) throw userError
-
-      // Luodaan aikaleima
       const timestamp = new Date(formData.date)
       const [hours, minutes] = formData.time.split(':')
       timestamp.setHours(parseInt(hours), parseInt(minutes))
 
-      // Lisätään merkintä
-      const { error: insertError } = await supabase
+      const { data: newEntry, error: insertError } = await supabase
         .from('consumption')
         .insert([{
           user_id: authUser.id,
@@ -120,86 +185,32 @@ export default function TrackingPage() {
           caffeine_amount: formData.amount,
           created_at: timestamp.toISOString()
         }])
+        .select()
+        .single()
 
       if (insertError) throw insertError
 
-      // Päivitetään käyttäjän kokonaismäärä
-      const newTotalCaffeine = (userData.total_caffeine || 0) + formData.amount
       const { error: updateError } = await supabase
         .from('users')
         .update({ 
-          total_caffeine: newTotalCaffeine,
+          total_caffeine: (userData?.total_caffeine || 0) + formData.amount,
           updated_at: new Date().toISOString()
         })
         .eq('id', authUser.id)
 
       if (updateError) throw updateError
 
-      // Haetaan päivitetyt merkinnät
-      const { data: updatedEntries, error: entriesError } = await supabase
-        .from('consumption')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .order('created_at', { ascending: false })
-
-      if (entriesError) throw entriesError
-
-      setEntries(updatedEntries || [])
-
-      // Tarkistetaan saavutukset
-      const achievementsToCheck = [
-        { id: "1", condition: updatedEntries?.length === 1, title: "First Timer" },
-        { id: "6", condition: newTotalCaffeine >= 1000, title: "Caffeine Apprentice" },
-        { id: "7", condition: newTotalCaffeine >= 5000, title: "Caffeine Enthusiast" },
-        { id: "8", condition: newTotalCaffeine >= 10000, title: "Caffeine Addict" },
-        { id: "9", condition: newTotalCaffeine >= 25000, title: "Caffeine Master" },
-        { id: "10", condition: newTotalCaffeine >= 50000, title: "Caffeine Legend" },
-        { id: "11", condition: updatedEntries?.length >= 10, title: "Entry Milestone: 10" },
-        { id: "12", condition: updatedEntries?.length >= 50, title: "Entry Milestone: 50" },
-        { id: "13", condition: updatedEntries?.length >= 100, title: "Entry Milestone: 100" },
-        { id: "14", condition: updatedEntries?.length >= 500, title: "Entry Milestone: 500" }
-      ]
-
-      // Tarkistetaan jokainen saavutus
-      for (const achievement of achievementsToCheck) {
-        if (achievement.condition) {
-          // Tarkistetaan, onko saavutus jo ansaittu
-          const { data: existingAchievement } = await supabase
-            .from('user_achievements')
-            .select('*')
-            .eq('user_id', authUser.id)
-            .eq('achievement_id', achievement.id)
-            .single()
-
-          if (!existingAchievement) {
-            // Jos saavutusta ei ole vielä ansaittu, lisätään se
-            const { error: achievementError } = await supabase
-              .from('user_achievements')
-              .insert([{
-                user_id: authUser.id,
-                achievement_id: achievement.id,
-                achieved_at: new Date().toISOString()
-              }])
-
-            if (!achievementError) {
-              toast.success(`New achievement unlocked: ${achievement.title}!`)
-            }
-          }
-        }
-      }
-
+      await loadData()
       toast.success("Entry added successfully")
       
-      // Nollataan lomake
       setFormData({
         type: "",
         amount: undefined,
         date: new Date(),
         time: format(new Date(), "HH:mm")
       })
-
     } catch (error) {
-      console.error('Error adding entry:', error)
+      console.error('Error in handleSubmit:', error)
       toast.error("Error adding entry")
     } finally {
       setIsLoading(false)
@@ -215,7 +226,6 @@ export default function TrackingPage() {
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
-    // Sallitaan vain positiiviset numerot
     if (value === "" || /^\d+$/.test(value)) {
       setFormData(prev => ({
         ...prev,
@@ -224,10 +234,10 @@ export default function TrackingPage() {
     }
   }
 
-  // Ryhmitellään merkinnät päivämäärän mukaan
   const entriesByDate = entries.reduce(
-    (acc, entry: ConsumptionEntry) => {
-      const date = format(new Date(entry.created_at), 'yyyy-MM-dd')
+    (acc, entry: Consumption) => {
+      const entryDate = entry.created_at ? new Date(entry.created_at) : new Date()
+      const date = format(entryDate, 'yyyy-MM-dd')
       if (!acc[date]) {
         acc[date] = []
       }
@@ -235,7 +245,7 @@ export default function TrackingPage() {
         id: entry.id,
         type: entry.drink_name,
         amount: entry.caffeine_amount,
-        time: format(new Date(entry.created_at), 'HH:mm'),
+        time: format(entryDate, 'HH:mm'),
         date: date
       })
       return acc
@@ -254,7 +264,6 @@ export default function TrackingPage() {
           </div>
 
           <div className="grid gap-8 md:grid-cols-3">
-            {/* Add New Entry Card */}
             <Card className="md:col-span-1">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -365,7 +374,6 @@ export default function TrackingPage() {
               </CardFooter>
             </Card>
 
-            {/* History Card */}
             <Card className="md:col-span-2">
               <CardHeader>
                 <CardTitle>Caffeine History</CardTitle>
