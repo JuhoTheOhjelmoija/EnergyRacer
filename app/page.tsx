@@ -51,10 +51,10 @@ export default function LandingPage() {
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
                   <Button asChild size="lg">
-                    <Link href="/auth?mode=signup">Sign Up</Link>
+                    <Link href="/register">Sign Up</Link>
                   </Button>
                   <Button variant="outline" size="lg" asChild>
-                    <Link href="/auth?mode=signin">Sign In</Link>
+                    <Link href="/login">Sign In</Link>
                   </Button>
                 </div>
               </div>

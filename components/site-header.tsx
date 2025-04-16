@@ -58,10 +58,10 @@ export const SiteHeader = React.memo(() => {
           {isHomePage && !authUser ? (
             <>
               <Button variant="outline" size="sm" asChild className="hidden md:flex">
-                <Link href="/auth">Sign In</Link>
+                <Link href="/login">Sign In</Link>
               </Button>
               <Button size="sm" asChild className="hidden md:flex">
-                <Link href="/auth">Sign Up</Link>
+                <Link href="/register">Sign Up</Link>
               </Button>
             </>
           ) : null}
